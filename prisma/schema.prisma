@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model classes {
+  id                    Int                     @id(map: "classes_pk") @default(autoincrement())
+  name                  String
+  student_class_history student_class_history[]
+  students              students[]
+}
+
+model student_class_history {
+  id          Int      @id(map: "student_class_history_pk") @default(autoincrement())
+  student_id  Int
+  class_id    Int
+  school_year Int
+  students    students @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "student_class_history_fk0")
+  classes     classes  @relation(fields: [class_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "student_class_history_fk1")
+}
+
+model students {
+  id                    Int                     @id(map: "students_pk") @default(autoincrement())
+  name                  String
+  birthday              DateTime                @db.Date
+  cpf                   String                  @unique @db.VarChar(11)
+  enrollment            DateTime                @default(dbgenerated("CURRENT_DATE")) @db.Date
+  current_class_id      Int
+  student_class_history student_class_history[]
+  classes               classes                 @relation(fields: [current_class_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "students_fk0")
+}
