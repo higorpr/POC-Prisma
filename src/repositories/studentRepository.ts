@@ -1,71 +1,80 @@
 import { students } from "@prisma/client";
 import prisma from "../database/db.js";
-import { Student } from "../protocols/types.js";
+import { Student, StudentHistoryEntry } from "../protocols/types.js";
 
 export async function getAllStudents() {
-	return await prisma.students.findMany();
+    return await prisma.students.findMany({
+        orderBy: {
+            id: "asc",
+        },
+        select:{
+            id:true,
+            name:true,
+            birthday:true,
+            enrollment:true,
+            classes:{
+                select:{
+                    name:true
+                }
+            },
+        }
+    });
 }
 
-export async function insertStudent(student: Student) {
-	await prisma.students.create({ data: student });
+export async function isNewStudent(cpf: string): Promise<boolean> {
+    const response = await prisma.students.findUnique({ where: { cpf: cpf } });
+    console.log("isNewStudent:", response);
+    if (response) {
+        return false;
+    }
+    return true;
 }
 
-// export function isNewStudent(cpf: string): {
+export async function getClassId(className: string): Promise<number> {
+    const classReturn = await prisma.classes.findFirst({
+        where: { name: className },
+    });
 
-// 	// const response = await connection.query(
-// 	// 	`
-//     //     SELECT
-//     //         NOT EXISTS(
-//     //             SELECT
-//     //                 true
-//     //             FROM
-//     //                 students
-//     //             WHERE
-//     //                 cpf = $1
-//     //         ) AS "existingStudent";
-//     // `,
-// 	// 	[cpf]
-// 	// );
-// 	// const output: boolean = response.rows[0].existingStudent;
-// 	// return output;
-// }
+    if (!classReturn) return null;
 
-// export function getStudentInfoByCpf(cpf: string) {
-// 	// return connection.query(
-// 	// 	`
-//     //     SELECT
-//     //         name, TO_CHAR(birthday, 'DD-MM-YYYY') AS birthday, TO_CHAR(enrollment, 'DD-MM-YYYY HH24:MI:SS') AS enrollment
-//     //     FROM
-//     //         students
-//     //     WHERE
-//     //         cpf = $1
-//     // `,
-// 	// 	[cpf]
-// 	// );
-// }
+    return classReturn.id;
+}
 
-// export function updateStudent(cpf: string, newName: string, newBirthday: Date) {
-// 	// connection.query(
-// 	// 	`
-//     //     UPDATE
-//     //         students
-//     //     SET
-//     //         name= $1, birthday =$2
-//     //     WHERE
-//     //         cpf = $3
-//     //     `,
-// 	// 	[newName, newBirthday, cpf]
-// 	// );
-// }
+export async function checkId(studentId: number): Promise<boolean> {
+    const student = await prisma.students.findUnique({
+        where: { id: studentId },
+    });
+    if (!student) return false;
+    return true;
+}
 
-// export function deleteStudent(cpf: string) {
-// 	// connection.query(
-// 	// 	`
-//     //     DELETE FROM
-//     //         students
-//     //     WHERE
-//     //         cpf=$1
-//     //     `,
-// 	// 	[cpf]
-// 	// );
-// }
+export async function upsertStudent(
+    studentId: number,
+    student: Student
+) {
+    return await prisma.students.upsert({
+        where: { id: studentId },
+        create: {
+            name: student.name,
+            birthday: student.birthday,
+            cpf: student.cpf,
+            current_class_id: student.current_class_id,
+        },
+        update: {
+            name: student.name,
+            birthday: student.birthday,
+            cpf: student.cpf,
+            current_class_id: student.current_class_id,
+        },
+    });
+}
+
+export async function createStudentHistory(
+    historyObj: StudentHistoryEntry
+): Promise<void> {
+    await prisma.student_class_history.create({ data: historyObj });
+}
+
+export async function deleteStudent(studentId: number): Promise<void> {
+    await prisma.students.delete({ where: { id: studentId } });
+}

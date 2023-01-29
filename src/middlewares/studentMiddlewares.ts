@@ -1,101 +1,119 @@
 import { Request, Response, NextFunction } from "express";
-import {
-	cpfSchema,
-	studentSchema,
-	updateSchema,
-} from "../models/studentSchema.js";
+import { createOrUpdateSchema } from "../models/studentSchema.js";
 import { Student } from "../protocols/types.js";
-// import { isNewStudent } from "../repositories/studentRepository.js";
+import {
+    checkId,
+    getClassId,
+    isNewStudent,
+} from "../repositories/studentRepository.js";
 
-export function validateStudent(
-	req: Request,
-	res: Response,
-	next: NextFunction
+export async function checkIfNewStudent(
+    req: Request,
+    res: Response,
+    next: NextFunction
 ) {
-	const student = req.body as Student;
-	const { error } = studentSchema.validate(student);
+    const { cpf }: { cpf: string } = req.body as Student;
+    try {
+        const isNew = await isNewStudent(cpf);
+        if (!isNew) {
+            return res.status(409).send("This student is already enrolled.");
+        }
+    } catch (err) {
+        console.log(err);
+        return res.sendStatus(500);
+    }
 
-	if (error) {
-		const errors = error.details.map((e) => e.message);
-		return res.status(400).send(errors);
-	}
-
-	res.locals.student = req.body;
-	next();
+    next();
 }
 
-// export async function checkIfNewStudent(
-// 	req: Request,
-// 	res: Response,
-// 	next: NextFunction
-// ) {
-// 	const { cpf }: { cpf: string } = req.body as Student;
-// 	try {
-// 		const isNew = await isNewStudent(cpf);
-// 		if (!isNew) {
-// 			return res.status(409).send("This student is already enrolled.");
-// 		}
-// 	} catch (err) {
-// 		console.log(err);
-// 		return res.sendStatus(500);
-// 	}
+export function validateCreateOrUpdate(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    const updateInfo = req.body;
+    const { error } = createOrUpdateSchema.validate(updateInfo);
 
-// 	next();
-// }
+    if (error) {
+        const errors = error.details.map((e) => e.message);
+        return res.status(400).send(errors);
+    }
 
-export function validateCpf(req: Request, res: Response, next: NextFunction) {
-	const studentCpf = req.body.cpf
-		? (req.body as { cpf: string })
-		: (req.params as { cpf: string });
-	const { error } = cpfSchema.validate(studentCpf);
+    res.locals.student = req.body;
 
-	if (error) {
-		const errors = error.details.map((e) => e.message);
-		return res.status(400).send(errors);
-	}
+    next();
+}
 
-	res.locals.cpf = studentCpf.cpf;
+export async function checkClassName(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    const { className } = res.locals.student;
+    if (!className) {
+        return res.sendStatus(400);
+    }
+
+    try {
+        const classId = await getClassId(className);
+
+        if (!classId) {
+            return res.status(404).send("Not a valid class.");
+        }
+
+        res.locals.student.current_class_id = classId;
+        delete res.locals.student.className;
+    } catch (err) {
+        console.log(err);
+        return res.sendStatus(500);
+    }
+
+    next();
+}
+
+export async function checkStudentId(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    const { studentId } = req.params;
 	
-	next();
+    if (!studentId) {
+        res.locals.studentId = 0;
+    } else {
+        try {
+            const idCheck = await checkId(Number(studentId));
+            if (!idCheck) {
+                return res.status(404).send("There is no student with this id");
+            }
+        } catch (err) {
+            console.log(err);
+            return res.sendStatus(500);
+        }
+        res.locals.studentId = Number(studentId);
+    }
+
+    next();
 }
 
-export function validateUpdate(
-	req: Request,
-	res: Response,
-	next: NextFunction
+export async function checkIfEnrolledStudent(
+    req: Request,
+    res: Response,
+    next: NextFunction
 ) {
-	const updateInfo = req.body as { name: string; birthday: Date };
-	const { error } = updateSchema.validate(updateInfo);
+    const cpf: string = res.locals.cpf;
 
-	if (error) {
-		const errors = error.details.map((e) => e.message);
-		return res.status(400).send(errors);
-	}
+    try {
+        const isNew = await isNewStudent(cpf);
+        if (isNew) {
+            return res
+                .status(404)
+                .send("This person is not enrolled in the school.");
+        }
+    } catch (err) {
+        console.log(err);
+        return res.sendStatus(500);
+    }
 
-	res.locals.name = updateInfo.name;
-	res.locals.birthday = updateInfo.birthday;
-
-	next();
+    next();
 }
-
-// export async function checkIfEnrolledStudent(
-// 	req: Request,
-// 	res: Response,
-// 	next: NextFunction
-// ) {
-// 	const cpf: string = res.locals.cpf;
-
-// 	try {
-// 		const isNew = await isNewStudent(cpf);
-// 		if (isNew) {
-// 			return res
-// 				.status(404)
-// 				.send("This person is not enrolled in the school.");
-// 		}
-// 	} catch (err) {
-// 		console.log(err);
-// 		return res.sendStatus(500);
-// 	}
-
-// 	next();
-// }
